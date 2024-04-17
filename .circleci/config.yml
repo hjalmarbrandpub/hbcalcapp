@@ -1,1 +1,53 @@
+# Python CircleCI 2.1 configuration file
+version: 2.1
+defaults: &defaults
+  working_directory: ~/repo
+orbs:
+  sonarcloud: sonarsource/sonarcloud@2.0.0
+  # using the latest pyhon orb
+  python: circleci/python@2.1.1
 
+jobs:
+  build_and_test:
+    <<: *defaults
+    executor: python/default 
+
+    steps:
+      # Step 1: obtain repo from GitHub
+      - checkout
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "requirements.txt" }}
+          # fallback to using the latest cache if no exact match is found
+          - v1-dependencies-
+      - python/install-packages:
+          pkg-manager: pip
+      - python/install-packages:    
+          pip-dependency-file: requirements.txt
+          pkg-manager: pip
+      - python/install-packages:
+          args: pytest
+          pkg-manager: pip
+          pypi-cache: false
+      - python/install-packages:
+          args: pylint
+          pkg-manager: pip
+          pypi-cache: false
+      - run:
+          command: |
+            mkdir tests
+            pytest --version --junitxml=tests/junit.xml
+            pylint ./**/*.py 
+            pytest --cov=app --cov-report=xml
+          name: Test
+      - store_test_results:
+          path: tests
+      - sonarcloud/scan
+workflows:
+  main:
+    jobs:
+      - build_and_test:
+          context: dev
+          filters:
+            tags:
+              only: /^v.*/
